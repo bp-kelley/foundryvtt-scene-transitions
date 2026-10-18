@@ -81,12 +81,27 @@ export class SceneTransition {
         return data;
     }
 
+    /**
+     * Get the scene id from a context menu target.
+     * The target may be an HTMLElement or jQuery object, and the id may sit on
+     * the element itself or on its closest directory entry or nav item.
+     * @param {HTMLElement|jQuery} li The context menu target
+     * @returns {string|undefined}    The scene id
+     */
+    static getSceneIdFromElement(li) {
+        const element = li instanceof HTMLElement ? li : li?.[0];
+        if (!element) return undefined;
+        const holder = element.closest?.("[data-scene-id], [data-entry-id], [data-document-id]") ?? element;
+        const { sceneId, entryId, documentId } = holder.dataset ?? {};
+        return sceneId || entryId || documentId;
+    }
+
     static addPlayTransitionBtn() {
         return {
             name: game.i18n.localize(`${CONSTANTS.MODULE.ID}.label.playTransition`),
             icon: '<i class="fas fa-play-circle"></i>',
             condition: (li) => {
-                const sceneID = $(li).data("sceneId") || $(li).data("entryId") || $(li).data("documentId");
+                const sceneID = SceneTransition.getSceneIdFromElement(li);
                 const scene = game.scenes?.get(sceneID);
                 const hasTransition = scene && typeof scene.getFlag(CONSTANTS.MODULE.ID, "transition") == "object";
                 if (game.user?.isGM && hasTransition) {
@@ -96,7 +111,7 @@ export class SceneTransition {
                 }
             },
             callback: (li) => {
-                const sceneID = $(li).data("sceneId") || $(li).data("entryId") || $(li).data("documentId");
+                const sceneID = SceneTransition.getSceneIdFromElement(li);
                 Utils.preloadScene(sceneID);
                 const scene = game.scenes?.get(sceneID);
                 //@ts-ignore
@@ -120,7 +135,7 @@ export class SceneTransition {
             name: "Create Transition",
             icon: '<i class="fas fa-plus-square"></i>',
             condition: (li) => {
-                const sceneID = $(li).data("sceneId") || $(li).data("entryId") || $(li).data("documentId");
+                const sceneID = SceneTransition.getSceneIdFromElement(li);
                 const scene = game.scenes?.get(sceneID);
                 const hasNoTransition = scene && !scene.getFlag(CONSTANTS.MODULE.ID, "transition");
                 if (game.user?.isGM && hasNoTransition) {
@@ -130,13 +145,14 @@ export class SceneTransition {
                 }
             },
             callback: (li) => {
-                let sceneID = $(li).data("sceneId") || $(li).data("entryId") || $(li).data("documentId");
+                let sceneID = SceneTransition.getSceneIdFromElement(li);
                 let options = {
                     sceneID: sceneID,
                 };
                 let activeTransition = new SceneTransition(true, options, undefined);
+                activeTransition.options.sceneID = sceneID;
                 activeTransition.render();
-                new EditTransitionForm(activeTransition, undefined).render(true);
+                new EditTransitionForm(activeTransition, { sceneID }).render(true);
             },
         };
     }
@@ -146,7 +162,7 @@ export class SceneTransition {
             name: "Edit Transition",
             icon: '<i class="fas fa-edit"></i>',
             condition: (li) => {
-                const sceneID = $(li).data("sceneId") || $(li).data("entryId") || $(li).data("documentId");
+                const sceneID = SceneTransition.getSceneIdFromElement(li);
                 const scene = game.scenes?.get(sceneID);
                 const hasTransition = scene && scene.getFlag(CONSTANTS.MODULE.ID, "transition");
                 if (game.user?.isGM && hasTransition) {
@@ -156,13 +172,13 @@ export class SceneTransition {
                 }
             },
             callback: (li) => {
-                let scene = game.scenes?.get(
-                    $(li).data("sceneId") || $(li).data("entryId") || $(li).data("documentId"),
-                );
+                let scene = game.scenes?.get(SceneTransition.getSceneIdFromElement(li));
                 let transition = scene.getFlag(CONSTANTS.MODULE.ID, "transition");
                 let activeTransition = new SceneTransition(true, transition.options, undefined);
+                // Older saves may be missing the scene id, so always take it from the scene
+                activeTransition.options.sceneID = scene.id;
                 activeTransition.render();
-                new EditTransitionForm(activeTransition, undefined).render(true);
+                new EditTransitionForm(activeTransition, { sceneID: scene.id }).render(true);
             },
         };
     }
@@ -172,7 +188,7 @@ export class SceneTransition {
             name: game.i18n.localize(`${CONSTANTS.MODULE.ID}.label.deleteTransition`),
             icon: '<i class="fas fa-trash-alt"></i>',
             condition: (li) => {
-                const sceneID = $(li).data("sceneId") || $(li).data("entryId") || $(li).data("documentId");
+                const sceneID = SceneTransition.getSceneIdFromElement(li);
                 const scene = game.scenes?.get(sceneID);
                 const hasTransition = scene && scene.getFlag(CONSTANTS.MODULE.ID, "transition");
                 if (game.user?.isGM && hasTransition) {
@@ -182,9 +198,7 @@ export class SceneTransition {
                 }
             },
             callback: (li) => {
-                let scene = game.scenes?.get(
-                    $(li).data("sceneId") || $(li).data("entryId") || $(li).data("documentId"),
-                );
+                let scene = game.scenes?.get(SceneTransition.getSceneIdFromElement(li));
                 scene.unsetFlag(CONSTANTS.MODULE.ID, "transition");
             },
         };

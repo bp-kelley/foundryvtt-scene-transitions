@@ -7,9 +7,12 @@ import DefaultOptionsForm from "./default-options-form.js";
  * Form controller for editing transitions
  */
 export default class EditTransitionForm extends DefaultOptionsForm {
-    constructor(object, options) {
-        super(object, options);
+    constructor(object, options = {}) {
+        // Keep the scene id apart from Application options so a merge or clone can't drop it
+        const { sceneID, ...appOptions } = options ?? {};
+        super(object, appOptions);
         this.transition = object || {};
+        this.sceneID = sceneID || this.transition.options?.sceneID;
         this.data = {};
         this.interval = null;
     }
@@ -205,13 +208,18 @@ export default class EditTransitionForm extends DefaultOptionsForm {
     async _updateObject(event, formData) {
         this.transition.updateData(formData);
 
-        const scene = game.scenes?.get(this.transition.options.sceneID);
+        const sceneID = this.sceneID || this.transition.options.sceneID;
+        const scene = game.scenes?.get(sceneID);
 
-        if (this.transition.options.sceneID && scene) {
-            await scene.setFlag(CONSTANTS.MODULE.ID, "transition", this.transition);
-        } else {
-            Logger.warn(`No scene has been found with id ${this.transition.options.sceneID}`);
+        if (!scene) {
+            Logger.warn(`No scene has been found with id ${sceneID}`);
             return;
         }
+
+        // Store plain option data only. The transition object also holds the
+        // overlay element and audio, which don't belong in a document flag.
+        const { default: _default, isEdit, transitionContent, ...options } = this.transition.options;
+        options.sceneID = scene.id;
+        await scene.setFlag(CONSTANTS.MODULE.ID, "transition", { options: foundry.utils.deepClone(options) });
     }
 }
