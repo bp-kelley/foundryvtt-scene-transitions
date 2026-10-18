@@ -59,7 +59,7 @@ export class SceneTransition {
      * @memberof PinFixer
      */
     static async getSceneHtml(settings) {
-        return await renderTemplate(CONSTANTS.TEMPLATE.EDIT_TRANSITION_FORM, settings);
+        return await Utils.renderTemplate(CONSTANTS.TEMPLATE.EDIT_TRANSITION_FORM, settings);
     }
 
     /**
@@ -71,7 +71,7 @@ export class SceneTransition {
      * @memberof PinFixer
      */
     static getSceneTemplateData(hookData) {
-        let data = getProperty(hookData.data?.flags[CONSTANTS.MODULE.ID], "transition.options");
+        let data = foundry.utils.getProperty(hookData.data?.flags[CONSTANTS.MODULE.ID], "transition.options");
 
         if (!data) {
             const defaultSettings = Utils.getSetting(CONSTANTS.SETTING.DEFAULT_OPTIONS) || {};
@@ -97,7 +97,7 @@ export class SceneTransition {
             },
             callback: (li) => {
                 const sceneID = $(li).data("sceneId") || $(li).data("entryId") || $(li).data("documentId");
-                game.scenes?.preload(sceneID, true);
+                Utils.preloadScene(sceneID);
                 const scene = game.scenes?.get(sceneID);
                 //@ts-ignore
                 let transition = scene.getFlag(CONSTANTS.MODULE.ID, "transition");
@@ -376,7 +376,7 @@ export class SceneTransition {
         }
 
         // Build new scene transition
-        const template = await renderTemplate(CONSTANTS.TEMPLATE.SCENE_TRANSITION, this.options);
+        const template = await Utils.renderTemplate(CONSTANTS.TEMPLATE.SCENE_TRANSITION, this.options);
         document.body.insertAdjacentHTML("beforeend", template);
 
         this.element = document.body.querySelector("#scene-transitions");

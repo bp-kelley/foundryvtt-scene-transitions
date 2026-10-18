@@ -39,7 +39,7 @@ export default class EditTransitionForm extends DefaultOptionsForm {
         const context = this.transition.options;
         context.default = CONSTANTS.DEFAULT_SETTING;
         context.isEdit = true;
-        context.transitionContent = await TextEditor.enrichHTML(this.transition.options.content, {
+        context.transitionContent = await (foundry.applications?.ux?.TextEditor?.implementation ?? TextEditor).enrichHTML(this.transition.options.content, {
             secrets: true,
             async: true,
         });
@@ -90,7 +90,7 @@ export default class EditTransitionForm extends DefaultOptionsForm {
     async activateListeners(html) {
         super.activateListeners(html);
 
-        const contentHTML = await TextEditor.enrichHTML(this.transition.options.content, {
+        const contentHTML = await (foundry.applications?.ux?.TextEditor?.implementation ?? TextEditor).enrichHTML(this.transition.options.content, {
             secrets: true,
             async: true,
         });
