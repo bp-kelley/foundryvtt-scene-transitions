@@ -50,7 +50,9 @@ Hooks.on("getJournalDirectoryContextOptions", (application, contextOptions) => {
     addContextButtons("getJournalEntryContextOptions", contextOptions);
 });
 
-Hooks.on("renderJournalSheet", (journal) => addJournalButton(journal));
+// v13+ journals use the ApplicationV2 JournalEntrySheet; keep the v1 hook for older sheets
+Hooks.on("renderJournalEntrySheet", (journal, element) => addJournalButton(journal, element));
+Hooks.on("renderJournalSheet", (journal, html) => addJournalButton(journal, html));
 
 /**
  * Add Create, Edit, Delete, Play context buttons
@@ -79,9 +81,10 @@ function addContextButtons(hookName, contextOptions) {
 
 /**
  * Add 'Play as Transition' button to Journal header
- * @param {object} journal The journal
+ * @param {object} journal             The journal sheet
+ * @param {HTMLElement|jQuery} html    The rendered element passed by the render hook
  */
-function addJournalButton(journal) {
+function addJournalButton(journal, html) {
     const pageTypes = ["image", "text", "video"];
 
     if (!game.user?.isGM) return;
@@ -89,24 +92,40 @@ function addJournalButton(journal) {
     const showJournalHeaderSetting = game.settings.get(CONSTANTS.MODULE.ID, CONSTANTS.SETTING.SHOW_JOURNAL_HEADER);
     if (!showJournalHeaderSetting) return;
 
-    const header = journal.element[0].querySelector("header");
+    // ApplicationV2 passes an HTMLElement, v1 passes jQuery. Always use the window's root element.
+    const root = journal.element instanceof HTMLElement ? journal.element : (journal.element?.[0] ?? html?.[0] ?? html);
+    const header = root?.querySelector?.("header.window-header") ?? root?.querySelector?.("header");
     if (!header) return;
 
-    const windowTitle = header.querySelector("h4.window-title");
+    const windowTitle = header.querySelector(".window-title");
     if (!windowTitle) return;
 
-    const existingLink = header.querySelector("a.play-transition");
+    const existingLink = header.querySelector(".play-transition");
     if (existingLink) existingLink.remove();
 
-    const page = journal.document.pages.contents[0];
-    if (!pageTypes.includes(page.type)) return;
+    const page = journal.document?.pages?.contents?.sort((a, b) => a.sort - b.sort)[0];
+    if (!page || !pageTypes.includes(page.type)) return;
 
-    const linkElement = document.createElement("a");
-    linkElement.classList.add("play-transition");
-    linkElement.innerHTML = '<i class="fas fa-play-circle"></i>Play as Transition';
+    const label = "Play as Transition";
+    let linkElement;
+    if (journal instanceof foundry.applications.api.ApplicationV2) {
+        linkElement = document.createElement("button");
+        linkElement.type = "button";
+        linkElement.classList.add("header-control", "icon", "fa-solid", "fa-circle-play", "play-transition");
+        linkElement.dataset.tooltip = label;
+        linkElement.setAttribute("aria-label", label);
+    } else {
+        linkElement = document.createElement("a");
+        linkElement.classList.add("play-transition");
+        linkElement.innerHTML = `<i class="fas fa-play-circle"></i>${label}`;
+    }
     windowTitle.after(linkElement);
 
-    linkElement.addEventListener("click", () => onClickJournalButton(page));
+    linkElement.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClickJournalButton(page);
+    });
 }
 
 /**
