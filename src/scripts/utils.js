@@ -100,6 +100,33 @@ export class Utils {
     }
 
     /**
+     * Preload a scene for every connected client.
+     * Foundry v14 replaced the legacy `push` boolean with a `broadcast` option.
+     * @param {string} sceneId The scene id
+     * @returns {Promise}      The preload promise
+     */
+    static preloadScene(sceneId) {
+        if (!sceneId) return;
+        const generation = game.release?.generation ?? 0;
+        if (generation >= 14) {
+            return game.scenes?.preload(sceneId, { broadcast: true });
+        }
+        return game.scenes?.preload(sceneId, true);
+    }
+
+    /**
+     * Render a Handlebars template, using the namespaced API when available.
+     * The global `renderTemplate` is deprecated since v13.
+     * @param {string} path The template path
+     * @param {object} data The template data
+     * @returns {Promise<string>} The rendered HTML
+     */
+    static renderTemplate(path, data) {
+        const fn = foundry.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate;
+        return fn(path, data);
+    }
+
+    /**
      * Get module setting
      * @param {string} key          The key
      * @param {string} defaultValue The default value

@@ -7,9 +7,12 @@ import DefaultOptionsForm from "./default-options-form.js";
  * Form controller for editing transitions
  */
 export default class EditTransitionForm extends DefaultOptionsForm {
-    constructor(object, options) {
-        super(object, options);
+    constructor(object, options = {}) {
+        // Keep the scene id apart from Application options so a merge or clone can't drop it
+        const { sceneID, ...appOptions } = options ?? {};
+        super(object, appOptions);
         this.transition = object || {};
+        this.sceneID = sceneID || this.transition.options?.sceneID;
         this.data = {};
         this.interval = null;
     }
@@ -39,7 +42,7 @@ export default class EditTransitionForm extends DefaultOptionsForm {
         const context = this.transition.options;
         context.default = CONSTANTS.DEFAULT_SETTING;
         context.isEdit = true;
-        context.transitionContent = await TextEditor.enrichHTML(this.transition.options.content, {
+        context.transitionContent = await (foundry.applications?.ux?.TextEditor?.implementation ?? TextEditor).enrichHTML(this.transition.options.content, {
             secrets: true,
             async: true,
         });
@@ -90,46 +93,41 @@ export default class EditTransitionForm extends DefaultOptionsForm {
     async activateListeners(html) {
         super.activateListeners(html);
 
-        const contentHTML = await TextEditor.enrichHTML(this.transition.options.content, {
+        const contentHTML = await (foundry.applications?.ux?.TextEditor?.implementation ?? TextEditor).enrichHTML(this.transition.options.content, {
             secrets: true,
             async: true,
         });
         $('[data-edit="content"]').html(contentHTML);
 
-        const fontColorSelector = `${foundry.utils.isNewerVersion(game.version, 11.315) ? "color-picker" : "input"}[name="fontColor"]`;
-        const fontColorElement = html[0].querySelector(fontColorSelector);
-        fontColorElement.addEventListener("change", this.#updateFontColor.bind(this));
+        // Select by name so this works whatever element the colorPicker helper renders
+        // (<color-picker> on v12-v13, a different element on v14), and skip missing fields
+        // instead of throwing and leaving the form half set up.
+        const root = html?.[0] ?? html;
+        const listen = (selector, events, handler) => {
+            const elements = root?.querySelectorAll?.(selector) ?? [];
+            if (!elements.length) {
+                Logger.debug(`Edit transition form: no element for ${selector}`);
+                return;
+            }
+            const bound = handler.bind(this);
+            for (const element of elements) {
+                for (const eventName of events) element.addEventListener(eventName, bound);
+            }
+        };
 
-        const fontSizeElement = html[0].querySelector('input[name="fontSize"]');
-        fontSizeElement.addEventListener("change", this.#updateFontSize.bind(this));
+        listen('[name="fontColor"]', ["change", "input"], this.#updateFontColor);
+        listen('input[name="fontSize"]', ["change"], this.#updateFontSize);
 
         // Figure out how to listen to all editor events
-        const editorElement = html[0].querySelector(".editor-content");
-        editorElement.addEventListener("input", this.#updateContent.bind(this));
-        editorElement.addEventListener("cut", this.#updateContent.bind(this));
-        editorElement.addEventListener("paste", this.#updateContent.bind(this));
+        listen(".editor-content", ["input", "cut", "paste"], this.#updateContent);
 
-        const bgImageElement = html[0].querySelector('input[name="bgImg"]');
-        bgImageElement.addEventListener("change", this.#updateBgImage.bind(this));
-
-        const bgPosElement = html[0].querySelector('input[name="bgPos"]');
-        bgPosElement.addEventListener("change", this.#updateBgPos.bind(this));
-
-        const bgSizeElement = html[0].querySelector('input[name="bgSize"]');
-        bgSizeElement.addEventListener("change", this.#updateBgSize.bind(this));
-
-        const bgColorSelector = `${foundry.utils.isNewerVersion(game.version, 11.315) ? "color-picker" : "input"}[name="bgColor"]`;
-        const bgColorElement = html[0].querySelector(bgColorSelector);
-        bgColorElement.addEventListener("change", this.#updateBgColor.bind(this));
-
-        const bgOpacityElement = html[0].querySelector('input[name="bgOpacity"]');
-        bgOpacityElement.addEventListener("change", this.#updateBgOpacity.bind(this));
-
-        const audioElement = html[0].querySelector('input[name="audio"]');
-        audioElement.addEventListener("change", this.#updateAudio.bind(this));
-
-        const volumeElement = html[0].querySelector('input[name="volume"]');
-        volumeElement.addEventListener("change", this.#updateVolume.bind(this));
+        listen('input[name="bgImg"]', ["change"], this.#updateBgImage);
+        listen('input[name="bgPos"]', ["change"], this.#updateBgPos);
+        listen('input[name="bgSize"]', ["change"], this.#updateBgSize);
+        listen('[name="bgColor"]', ["change", "input"], this.#updateBgColor);
+        listen('input[name="bgOpacity"]', ["change"], this.#updateBgOpacity);
+        listen('input[name="audio"]', ["change"], this.#updateAudio);
+        listen('input[name="volume"]', ["change"], this.#updateVolume);
     }
 
     #updateFontColor(event) {
@@ -150,8 +148,9 @@ export default class EditTransitionForm extends DefaultOptionsForm {
         if (!this.transition.element) {
             return;
         }
-        this.transition.element.querySelector(".scene-transitions-content").innerHTML =
-            this.editors.content.options.target.innerHTML;
+        const editorTarget = this.editors?.content?.options?.target ?? event.currentTarget;
+        if (!editorTarget) return;
+        this.transition.element.querySelector(".scene-transitions-content").innerHTML = editorTarget.innerHTML;
     }
 
     #updateBgImage(event) {
@@ -209,13 +208,18 @@ export default class EditTransitionForm extends DefaultOptionsForm {
     async _updateObject(event, formData) {
         this.transition.updateData(formData);
 
-        const scene = game.scenes?.get(this.transition.options.sceneID);
+        const sceneID = this.sceneID || this.transition.options.sceneID;
+        const scene = game.scenes?.get(sceneID);
 
-        if (this.transition.options.sceneID && scene) {
-            await scene.setFlag(CONSTANTS.MODULE.ID, "transition", this.transition);
-        } else {
-            Logger.warn(`No scene has been found with id ${this.transition.options.sceneID}`);
+        if (!scene) {
+            Logger.warn(`No scene has been found with id ${sceneID}`);
             return;
         }
+
+        // Store plain option data only. The transition object also holds the
+        // overlay element and audio, which don't belong in a document flag.
+        const { default: _default, isEdit, transitionContent, ...options } = this.transition.options;
+        options.sceneID = scene.id;
+        await scene.setFlag(CONSTANTS.MODULE.ID, "transition", { options: foundry.utils.deepClone(options) });
     }
 }
