@@ -456,7 +456,8 @@ export class SceneTransition {
         const contentElement = this.element.querySelector(".scene-transitions-content");
 
         const activateScene = () => {
-            if (!this.options.preview) {
+            // Journal and macro transitions have no scene to activate
+            if (!this.options.preview && this.options.sceneID) {
                 const scene = game.scenes?.get(this.options.sceneID);
 
                 if (game.user?.isGM && !scene) {
